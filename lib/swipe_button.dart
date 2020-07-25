@@ -8,6 +8,22 @@ enum SwipePosition {
   SwipeRight,
 }
 
+const sliderPadding = EdgeInsets.all(8);
+
+class SwipeController {
+  AnimationController _controller;
+
+  void _attachController(AnimationController controller) =>
+      _controller = controller;
+
+  void reset({Duration duration = const Duration(milliseconds: 600)}) {
+    assert(_controller != null,
+    'SwipeController was not attached to the SwipeButton');
+    _controller.duration = duration;
+    _controller.reverse();
+  }
+}
+
 class SwipeButton extends StatefulWidget {
   const SwipeButton({
     Key key,
@@ -16,7 +32,11 @@ class SwipeButton extends StatefulWidget {
     BorderRadius borderRadius,
     this.initialPosition = SwipePosition.SwipeLeft,
     @required this.onChanged,
+    this.swipeController,
     this.height = 56.0,
+    this.rightValue = 0.5,
+    this.color = Colors.deepPurpleAccent,
+    this.thumbColor = Colors.pinkAccent,
   })  : assert(initialPosition != null && onChanged != null && height != null),
         this.borderRadius = borderRadius ?? BorderRadius.zero,
         super(key: key);
@@ -27,6 +47,11 @@ class SwipeButton extends StatefulWidget {
   final double height;
   final SwipePosition initialPosition;
   final ValueChanged<SwipePosition> onChanged;
+  final SwipeController swipeController;
+
+  final Color color;
+  final Color thumbColor;
+  final double rightValue; // confirm value
 
   @override
   SwipeButtonState createState() => SwipeButtonState();
@@ -48,12 +73,14 @@ class SwipeButtonState extends State<SwipeButton>
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController.unbounded(vsync: this);
+    //_controller = AnimationController.unbounded(vsync: this);
+    _controller = AnimationController(vsync: this);
     _contentAnimation = Tween<double>(begin: 1.0, end: 0.0)
         .animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
     if (widget.initialPosition == SwipePosition.SwipeRight) {
       _controller.value = 1.0;
     }
+    widget.swipeController?._attachController(_controller);
   }
 
   @override
@@ -67,27 +94,34 @@ class SwipeButtonState extends State<SwipeButton>
     //final theme = Theme.of(context);
     return SizedBox(
       width: double.infinity,
-      height: 100.0,
+      //height: 100.0,
+      height: widget.height,
       child: Stack(
         key: _containerKey,
         children: <Widget>[
-          DecoratedBox(
-            decoration: BoxDecoration(
-              color: Colors.deepPurpleAccent,
-              borderRadius: new BorderRadius.all(new Radius.circular(50.0)),
-            ),
-            child: ClipRRect(
-              clipper: _SwipeButtonClipper(
-                animation: _controller,
-                borderRadius: widget.borderRadius,
+          // added padding
+          Padding(
+            padding: sliderPadding,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: widget.color,
+                //borderRadius: new BorderRadius.all(new Radius.circular(50.0)),
+                borderRadius:
+                    BorderRadius.all(Radius.circular(widget.height / 2)),
               ),
-              borderRadius: widget.borderRadius,
-              child: SizedBox.expand(
-                child: Padding(
-                  padding: EdgeInsets.only(left: widget.height),
-                  child: FadeTransition(
-                    opacity: _contentAnimation,
-                    child: widget.content,
+              child: ClipRRect(
+                clipper: _SwipeButtonClipper(
+                  animation: _controller,
+                  borderRadius: widget.borderRadius,
+                ),
+                borderRadius: widget.borderRadius,
+                child: SizedBox.expand(
+                  child: Padding(
+                    padding: EdgeInsets.only(left: widget.height),
+                    child: FadeTransition(
+                      opacity: _contentAnimation,
+                      child: widget.content,
+                    ),
                   ),
                 ),
               ),
@@ -107,11 +141,23 @@ class SwipeButtonState extends State<SwipeButton>
               onHorizontalDragEnd: _onDragEnd,
               child: Container(
                 key: _positionedKey,
-                width: 100,
-                height: 100,
+                //width: 100,
+                //height: 100,
+                width: widget.height,
+                height: widget.height,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Colors.pinkAccent,
+                  color: widget.thumbColor,
+                  // added shadow
+                  boxShadow: [
+                    const BoxShadow(
+                      color: Colors.black26,
+                      blurRadius: 2.0, // has the effect of softening the shadow
+                      spreadRadius:
+                          2.0, // has the effect of extending the shadow
+                      offset: Offset(1.0, 2.0),
+                    )
+                  ],
                 ),
                 child: widget.thumb,
               ),
@@ -142,7 +188,7 @@ class SwipeButtonState extends State<SwipeButton>
     }
     SwipePosition result;
     double acceleration, velocity;
-    if (_controller.value > 0.5) {
+    if (_controller.value > widget.rightValue) {
       acceleration = 0.5;
       velocity = fractionalVelocity;
       result = SwipePosition.SwipeRight;
